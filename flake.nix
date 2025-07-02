@@ -1,5 +1,5 @@
 {
-  description = "dev shell with uv & claude code";
+  description = "dev shell with uv";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -19,7 +19,6 @@
         pythonPkg: pkgs:
         pkgs.mkShell {
           buildInputs = with pkgs; [
-            nodejs_20
             pythonPkg
             uv
           ];
@@ -30,12 +29,6 @@
                 pkgs.stdenv.cc.cc
               ]
             }:$LD_LIBRARY_PATH
-            export NPM_CONFIG_PREFIX="$HOME/.npm-global"
-            export PATH="$HOME/.npm-global/bin:$PATH"
-
-            if [ ! -f "$HOME/.npm-global/bin/claude" ]; then
-              npm install -g @anthropic-ai/claude-code
-            fi
           '';
         };
     in
