@@ -3,26 +3,61 @@ name: Publish Python 🐍 distribution 📦 to PyPI
 on:
   push:
     tags:
-     - '*'
+      - "*"
   workflow_dispatch:
 
 jobs:
   build-n-publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
 
-    - name: Set up uv
-      run: curl -LsSf https://astral.sh/uv/0.4.1/install.sh | sh
+      - name: Set up uv
+        id: setup_uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    - name: Build package
-      run: uvx --from build pyproject-build --installer uv
+      - name: Build package
+        id: build
+        run: uvx --from build pyproject-build --installer uv
 
-    - name: Publish to pypi
-      env:
-        TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
-        TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-      run: uvx twine upload dist/*
+      - name: Publish to pypi
+        id: publish
+        env:
+          TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+        run: uvx twine upload dist/*
 
+      - name: Notify Discord (success)
+        if: ${{ success() }}
+        continue-on-error: true
+        uses: kabilan108/actions/discord-notify@v1
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          level: info
+          title: Publish succeeded
+          description: |
+            Repo: `${{ github.repository }}`
+            Ref: `${{ github.ref_name }}`
+            Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Notify Discord (failure)
+        if: ${{ failure() }}
+        continue-on-error: true
+        uses: kabilan108/actions/discord-notify@v1
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          level: error
+          title: Publish failed
+          description: |
+            Repo: `${{ github.repository }}`
+            Ref: `${{ github.ref_name }}`
+            Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Step outcomes:
+            - checkout: `${{ steps.checkout.outcome }}`
+            - setup_uv: `${{ steps.setup_uv.outcome }}`
+            - build: `${{ steps.build.outcome }}`
+            - publish: `${{ steps.publish.outcome }}`
