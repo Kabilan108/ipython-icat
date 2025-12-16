@@ -1,26 +1,25 @@
 {
-  description = "dev shell with uv";
+  description = "python devshell with uv";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # python 3.8.18
-    nixpkgs_p38.url = "github:NixOS/nixpkgs/336eda0d07dc5e2be1f923990ad9fdb6bc8e28e3";
-  };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.nixpkgs-python.url = "github:cachix/nixpkgs-python";
 
   outputs =
     {
       self,
       nixpkgs,
-      nixpkgs_p38,
+      nixpkgs-python,
     }:
     let
       system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
+
       mkDevShell =
-        pythonPkg: pkgs:
+        version:
         pkgs.mkShell {
-          buildInputs = with pkgs; [
-            pythonPkg
-            uv
+          buildInputs = [
+            nixpkgs-python.packages.${system}."${version}"
+            pkgs.uv
           ];
           shellHook = ''
             export LD_LIBRARY_PATH=${
@@ -33,15 +32,10 @@
         };
     in
     {
-      devShells.${system} = {
-        py38 = mkDevShell (import nixpkgs_p38 { inherit system; }).python38Full (
-          import nixpkgs { inherit system; }
-        );
-        py312 = mkDevShell (import nixpkgs { inherit system; }).python312Full (
-          import nixpkgs { inherit system; }
-        );
+      devShells.${system} = rec {
+        py38 = mkDevShell "3.8.17";
+        py312 = mkDevShell "3.12.0";
       };
-      # default to py312
-      devShell.${system} = self.devShells.${system}.py312;
+      devShell.${system} = self.devShells.${system}.py38;
     };
 }

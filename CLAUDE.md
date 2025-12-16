@@ -8,6 +8,18 @@ ipython-icat is a Python package that provides IPython magic commands for displa
 
 ## Development Commands
 
+### Nix Devshell
+
+Run Python commands inside the `flake.nix` devshell (it sets `LD_LIBRARY_PATH` so native deps like `matplotlib` import correctly):
+
+```bash
+# Default (py38)
+nix develop
+
+# Or select a specific shell
+nix develop .#py312
+```
+
 ### Environment Setup
 
 ```bash
