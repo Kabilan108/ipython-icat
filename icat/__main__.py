@@ -1,7 +1,7 @@
 import re
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from traitlets.config import Config
 from traitlets.config.loader import PyFileConfigLoader
@@ -54,8 +54,6 @@ def setup_ipython_profile(
             f.writelines(lines)
     except IOError as e:
         raise RuntimeError(f"Failed to write to config file {profile_path}: {e}")
-    except PermissionError:
-        raise RuntimeError(f"Permission denied when writing to {profile_path}")
 
     print(f"Successfully updated IPython config at {profile_path}")
     return True
@@ -71,7 +69,9 @@ def sanitize_profile_name(profile_name: str) -> str:
     return profile_name
 
 
-def get_profile_path(profile_name: str, ipython_path: Optional[str] = None) -> Path:
+def get_profile_path(
+    profile_name: str, ipython_path: Optional[Union[str, Path]] = None
+) -> Path:
     """Silently create a default profile if it doesn't exist"""
     profile_name = sanitize_profile_name(profile_name)
 
@@ -87,7 +87,7 @@ def get_profile_path(profile_name: str, ipython_path: Optional[str] = None) -> P
         profile_dir = ipython_path / f"profile_{profile_name}"
         if not profile_dir.exists():
             try:
-                subprocess.run(
+                _ = subprocess.run(
                     ["ipython", "profile", "create", profile_name], check=True
                 )
             except subprocess.CalledProcessError as e:
@@ -120,8 +120,8 @@ def dynamic_update_config(profile_path: Path) -> Tuple[str, str]:
     if "icat" not in extensions:
         extensions.append("icat")
 
-    if "%plt_icat" not in exec_lines:
-        exec_lines.append("%plt_icat")
+    if "%icat on" not in exec_lines and "%icat" not in exec_lines:
+        exec_lines.append("%icat on")
 
     extensions_line = f"c.InteractiveShellApp.extensions = {extensions}\n"
     exec_lines_line = f"c.InteractiveShellApp.exec_lines = {exec_lines}\n"

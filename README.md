@@ -30,20 +30,26 @@ In your IPython session, load the extension:
 
 ### Displaying Matplotlib Plots
 
-To use the kitty backend for matplotlib:
+To enable `icat` integration for both matplotlib plots and automatic PIL image rendering:
 
 ```python
-%plt_icat
+%icat
 ```
 
-After running this command, any matplotlib plots you create will be displayed directly in your kitty terminal.
+After running this command:
+- Matplotlib plots will be displayed directly in your kitty-compatible terminal.
+- Evaluating a `PIL.Image.Image` value (e.g. typing `img` at the prompt) will automatically render it.
+
+You can also run:
+- `%icat status` to see whether integration is enabled
+- `%icat off` to disable auto-rendering and restore the previous matplotlib backend (best-effort)
 
 ### Use as a Default Backend
 
 To set the kitty backend for matplotlib as the default, add the following lines to your IPython configuration file:
 
 1. `c.InteractiveShellApp.extensions = ['icat']`
-2. `c.InteractiveShellApp.exec_lines = ['%plt_icat']`
+2. `c.InteractiveShellApp.exec_lines = ['%icat on']`
 
 #### Automatic Setup
 
@@ -69,7 +75,7 @@ python -m icat setup --profile myprofile
 
 ### Displaying Images
 
-To display an image file or a PIL Image object:
+To display an image file, a PIL Image object, or a Python expression that evaluates to a PIL Image:
 
 ```python
 %icat path/to/your/image.jpg
@@ -83,10 +89,16 @@ img = Image.open('path/to/your/image.jpg')
 %icat img
 ```
 
+Expressions work too:
+
+```python
+%icat ds[0].image
+```
+
 You can also resize the image when displaying:
 
 ```python
-%icat path/to/your/image.jpg -w 300 -h 200
+%icat path/to/your/image.jpg -W 300 -H 200
 ```
 
 ### Using Ghostty

@@ -38,14 +38,14 @@ ipython
 # Within IPython, load the extension
 %load_ext icat
 
-# Enable the kitty backend for matplotlib
-%plt_icat
+# Enable icat integration (matplotlib + PIL auto-render)
+%icat
 
 # Display an image
 %icat path/to/image.jpg
 
 # Display with specific dimensions
-%icat path/to/image.jpg -w 300 -h 200
+%icat path/to/image.jpg -W 300 -H 200
 ```
 
 ### Building & Publishing
@@ -57,7 +57,7 @@ Handled by CI (GitHub Actions).
 The project is fairly simple with a single main module:
 
 1. **icat/\__init__.py**: Contains all the functionality including:
-   - `ICatMagics` class: Defines IPython magic commands (%icat and %plt_icat)
+   - `ICatMagics` class: Defines the `%icat` IPython magic
    - Matplotlib backend implementation based on matplotlib-backend-kitty
    - Functions to display PIL Image objects through the kitty terminal protocol
 
