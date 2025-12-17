@@ -3,17 +3,17 @@ from io import BytesIO
 from os import getenv
 from pathlib import Path
 from subprocess import run
+from typing import Optional
 
 import matplotlib
+from IPython.core.getipython import get_ipython
 from IPython.core.magic import Magics, line_magic, magics_class
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
-from IPython.core.getipython import get_ipython
 from matplotlib import interactive, is_interactive
 from matplotlib._pylab_helpers import Gcf
 from matplotlib.backend_bases import FigureManagerBase, _Backend
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from PIL import Image
-
 
 if hasattr(sys, "ps1") or sys.flags.interactive:
     interactive(True)
@@ -90,12 +90,16 @@ class ICatMagics(Magics):
 
         obj = _resolve_target(self.shell, target)
         if obj is None:
-            print(f"Error: could not resolve '{target}' as an image expression or file path.")
+            print(
+                f"Error: could not resolve '{target}' as an image expression or file path."
+            )
             return
 
         img = _coerce_to_image(obj)
         if img is None:
-            print(f"Error: '{target}' did not evaluate to a PIL Image or readable image path.")
+            print(
+                f"Error: '{target}' did not evaluate to a PIL Image or readable image path."
+            )
             return
 
         # resize the image if width or height is specified
@@ -108,7 +112,7 @@ class ICatMagics(Magics):
             _icat(output=False, input=buf.getbuffer())
 
 
-def icat(img: Image.Image, width: int = None, height: int = None):
+def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = None):
     img_ = img.copy()
     with BytesIO() as buf:
         if width or height:
@@ -183,7 +187,9 @@ def _print_status(shell) -> None:
         current = matplotlib.get_backend()
     except Exception:
         pass
-    print(f"icat: enabled={enabled}, matplotlib_backend={current!r}, prev_backend={prev!r}")
+    print(
+        f"icat: enabled={enabled}, matplotlib_backend={current!r}, prev_backend={prev!r}"
+    )
 
 
 def _resolve_target(shell, target: str):
@@ -204,7 +210,7 @@ def _resolve_target(shell, target: str):
 
 def _coerce_to_image(obj):
     if isinstance(obj, Image.Image):
-        return obj
+        return obj.copy()
 
     if isinstance(obj, (str, Path)):
         path = Path(obj).expanduser()
