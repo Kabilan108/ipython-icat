@@ -67,10 +67,11 @@ def _get_fit_dimensions(img_width: int, img_height: int) -> tuple[int, int]:
     max_cols = max(term_cols - 2, 1)
     
     # Calculate aspect ratio of the image
-    # Default to 1.0 (square) for edge case of zero height
-    if img_height > 0:
+    # Default to 1.0 (square) for edge cases of zero dimensions
+    if img_height > 0 and img_width > 0:
         img_aspect = img_width / img_height
     else:
+        # If either dimension is zero, treat as square (1:1)
         img_aspect = 1.0
     
     # Terminal character cells are typically twice as tall as they are wide
