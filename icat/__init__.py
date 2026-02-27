@@ -87,13 +87,19 @@ class ICatMagics(Magics):
     @argument("-W", "--width", type=int, help="Width to resize the image")
     @argument("-H", "--height", type=int, help="Height to resize the image")
     @argument("-f", "--fit", action="store_true", help="Fit image to terminal size")
+    @argument("--no-fit", action="store_true", help="Disable auto-fit for session")
     @line_magic
     def icat(self, line):
         args = parse_argstring(self.icat, line)
         target = (args.target or "").strip()
 
+        if args.fit and args.no_fit:
+            print("Error: --fit and --no-fit cannot be used together.")
+            return
+
         if target in {"", "on"}:
-            _enable_session(self.shell, fit=args.fit)
+            fit_pref = True if args.fit else False if args.no_fit else None
+            _enable_session(self.shell, fit=fit_pref)
             return
         if target == "off":
             _disable_session(self.shell)
@@ -187,13 +193,13 @@ def _is_fit_enabled() -> bool:
     return False
 
 
-def _enable_session(shell, fit: bool = False) -> None:
+def _enable_session(shell, fit: Optional[bool] = None) -> None:
     state = _session_state(shell)
     if state.get("enabled"):
         # If already enabled, just update fit setting if requested
-        if fit:
-            state["fit"] = True
-            print("icat: auto-fit enabled for all images")
+        if fit is not None:
+            state["fit"] = fit
+            print(f"icat: auto-fit {'enabled' if fit else 'disabled'} for all images")
         return
 
     try:
@@ -202,11 +208,11 @@ def _enable_session(shell, fit: bool = False) -> None:
         state["prev_mpl_backend"] = None
 
     # Store fit setting in session state
-    state["fit"] = fit
+    state["fit"] = bool(fit)
 
     try:
         matplotlib.use("module://icat")
-        fit_msg = " (with auto-fit)" if fit else ""
+        fit_msg = " (with auto-fit)" if state["fit"] else ""
         print(f"icat: enabled matplotlib backend + PIL auto-render{fit_msg}")
     except Exception as e:
         print(f"icat: failed to enable matplotlib backend: {e}")
@@ -249,7 +255,7 @@ def _print_status(shell) -> None:
         current = matplotlib.get_backend()
     except Exception:
         pass
-    fit = bool(state.get("fit"))
+    fit = _is_fit_enabled()
     print(
         f"icat: enabled={enabled}, fit={fit}, matplotlib_backend={current!r}, prev_backend={prev!r}"
     )
