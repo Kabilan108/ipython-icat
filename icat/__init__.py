@@ -52,7 +52,7 @@ def _get_fit_dimensions(img_width: int, img_height: int) -> tuple[int, int]:
         img_height: Original image height in pixels
         
     Returns:
-        Tuple of (width, height) in pixels that fit the terminal
+        Tuple of (width, height) in character cells that fit the terminal
     """
     try:
         term_size = shutil.get_terminal_size()
@@ -66,28 +66,33 @@ def _get_fit_dimensions(img_width: int, img_height: int) -> tuple[int, int]:
     max_rows = max(term_rows - 2, 1)
     max_cols = max(term_cols - 2, 1)
     
-    # Typical terminal cell aspect ratio is ~1:2 (width:height in character units)
-    # but each character cell is approximately 10x20 pixels
-    # For kitty, we use character dimensions and let kitty handle the pixel conversion
-    
-    # Calculate aspect ratios
+    # Calculate aspect ratio of the image
     img_aspect = img_width / img_height if img_height > 0 else 1.0
     
-    # Character cells are roughly twice as tall as wide, so adjust
-    # We want to preserve the image aspect ratio in screen space
-    cell_aspect_ratio = 0.5  # width/height of a single character cell
+    # Terminal character cells are typically twice as tall as they are wide
+    # So to preserve image aspect ratio, we need to account for this:
+    # If image is W x H pixels, and we want it to look right in terminal,
+    # we need (cols / 2) / rows = W / H
+    # Therefore: cols = 2 * rows * (W / H)
+    # And: rows = cols / (2 * (W / H))
     
-    # Calculate the maximum dimensions that fit, preserving aspect ratio
-    # If we use max_cols columns, how many rows do we need?
-    rows_for_max_cols = max_cols / (img_aspect * cell_aspect_ratio)
+    # Try fitting by width first
+    rows_if_full_width = max_cols / (2 * img_aspect)
     
-    if rows_for_max_cols <= max_rows:
+    if rows_if_full_width <= max_rows:
         # Image fits when using full width
-        return max_cols, int(rows_for_max_cols)
+        return max_cols, max(1, int(rows_if_full_width))
     else:
-        # Need to constrain by height
-        cols_for_max_rows = int(max_rows * img_aspect * cell_aspect_ratio)
-        return cols_for_max_rows, max_rows
+        # Image is too tall, constrain by height
+        cols_if_full_height = 2 * max_rows * img_aspect
+        
+        if cols_if_full_height <= max_cols:
+            # Fits within column constraint
+            return max(1, int(cols_if_full_height)), max_rows
+        else:
+            # Still too wide even at max height, just use max dimensions
+            # This shouldn't normally happen with reasonable images
+            return max_cols, max_rows
 
 
 class FigureManagerICat(FigureManagerBase):
