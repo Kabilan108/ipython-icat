@@ -99,19 +99,20 @@ class FigureManagerICat(FigureManagerBase):
     def show(self):
         with BytesIO() as buf:
             self.canvas.figure.savefig(buf, format="png")
-            buf.seek(0)
             
             # Check if fit is enabled via environment variable
             fit_enabled = getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}
             
             if fit_enabled:
                 # Get image dimensions
+                buf.seek(0)
                 img = Image.open(buf)
                 img_width, img_height = img.size
+                img.close()  # Close to release buffer
                 buf.seek(0)
-                _icat(output=False, input=buf.getbuffer(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
+                _icat(output=False, input=buf.getvalue(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
             else:
-                _icat(output=False, input=buf.getbuffer())
+                _icat(output=False, input=buf.getvalue())
 
 
 class FigureCanvasICat(FigureCanvasAgg):
@@ -186,14 +187,13 @@ class ICatMagics(Magics):
         # display image
         with BytesIO() as buf:
             img.save(buf, format="PNG")
-            buf.seek(0)
             
             if fit_enabled and not (args.width or args.height):
                 # Only apply fit if manual dimensions aren't specified
                 img_width, img_height = img.size
-                _icat(output=False, input=buf.getbuffer(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
+                _icat(output=False, input=buf.getvalue(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
             else:
-                _icat(output=False, input=buf.getbuffer())
+                _icat(output=False, input=buf.getvalue())
 
 
 def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = None, fit: bool = False):
@@ -214,14 +214,13 @@ def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = 
         if width or height:
             img_.thumbnail((width or img.width, height or img.height))
         img_.save(buf, format="PNG")
-        buf.seek(0)
         
         if fit_enabled and not (width or height):
             # Only apply fit if manual dimensions aren't specified
             img_width, img_height = img_.size
-            _icat(output=False, input=buf.getbuffer(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
+            _icat(output=False, input=buf.getvalue(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
         else:
-            _icat(output=False, input=buf.getbuffer())
+            _icat(output=False, input=buf.getvalue())
 
 
 def load_ipython_extension(ipython):
