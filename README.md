@@ -73,6 +73,21 @@ Example with custom profile:
 python -m icat setup --profile myprofile
 ```
 
+### Environment Variables
+
+The extension supports the following environment variables:
+
+- `IPYTHON_ICAT_AUTO`: Automatically enable icat integration when IPython starts. Set to `1`, `true`, `yes`, or `on` to enable.
+- `IPYTHON_ICAT_FIT`: Automatically fit all images and plots to terminal size. Set to `1`, `true`, `yes`, or `on` to enable.
+
+Example:
+```bash
+export IPYTHON_ICAT_AUTO=1
+export IPYTHON_ICAT_FIT=1
+ipython
+```
+
+
 ### Displaying Images
 
 To display an image file, a PIL Image object, or a Python expression that evaluates to a PIL Image:
@@ -101,6 +116,22 @@ You can also resize the image when displaying:
 %icat path/to/your/image.jpg -W 300 -H 200
 ```
 
+#### Auto-fit to Terminal
+
+To automatically fit an image to your terminal size while preserving its aspect ratio:
+
+```python
+%icat path/to/your/image.jpg --fit
+```
+
+You can also enable auto-fit by default using an environment variable:
+
+```bash
+export IPYTHON_ICAT_FIT=1
+```
+
+With this environment variable set, all images and matplotlib plots will automatically fit to your terminal size. You can still override this behavior by explicitly specifying width and height with `-W` and `-H` options.
+
 ### Using Ghostty
 
 If you'd like to use this plugin with Ghostty, make sure to install the [static kitten binary](https://github.com/kovidgoyal/kitty/releases) which will allow you to run `kitten icat`.
@@ -110,6 +141,7 @@ If you'd like to use this plugin with Ghostty, make sure to install the [static 
 - Display matplotlib plots directly in kitty terminal
 - Show PIL Image objects or image files
 - Resize images on display
+- Auto-fit images to terminal size
 - Seamless integration with IPython workflow
 
 ## Contributing
