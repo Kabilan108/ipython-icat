@@ -25,7 +25,7 @@ def _run(*cmd):
         # Build command with optional fit parameters
         cmd_args = list(args)
         
-        if fit_to_terminal and img_width and img_height:
+        if fit_to_terminal and img_width is not None and img_height is not None:
             # Calculate terminal-fit dimensions
             fit_width, fit_height = _get_fit_dimensions(img_width, img_height)
             # Use --place to specify cell dimensions for kitty
@@ -67,7 +67,11 @@ def _get_fit_dimensions(img_width: int, img_height: int) -> tuple[int, int]:
     max_cols = max(term_cols - 2, 1)
     
     # Calculate aspect ratio of the image
-    img_aspect = img_width / img_height if img_height > 0 else 1.0
+    # Default to 1.0 (square) for edge case of zero height
+    if img_height > 0:
+        img_aspect = img_width / img_height
+    else:
+        img_aspect = 1.0
     
     # Terminal character cells are typically twice as tall as they are wide
     # So to preserve image aspect ratio, we need to account for this:
@@ -77,6 +81,7 @@ def _get_fit_dimensions(img_width: int, img_height: int) -> tuple[int, int]:
     # And: rows = cols / (2 * (W / H))
     
     # Try fitting by width first
+    # rows = cols / (2 * aspect)
     rows_if_full_width = max_cols / (2 * img_aspect)
     
     if rows_if_full_width <= max_rows:
@@ -84,6 +89,7 @@ def _get_fit_dimensions(img_width: int, img_height: int) -> tuple[int, int]:
         return max_cols, max(1, int(rows_if_full_width))
     else:
         # Image is too tall, constrain by height
+        # cols = 2 * rows * aspect
         cols_if_full_height = 2 * max_rows * img_aspect
         
         if cols_if_full_height <= max_cols:
@@ -108,7 +114,7 @@ class FigureManagerICat(FigureManagerBase):
                 buf.seek(0)
                 img = Image.open(buf)
                 img_width, img_height = img.size
-                img.close()  # Close to release buffer
+                # Don't close img here - it would close the underlying buffer
                 buf.seek(0)
                 _icat(output=False, input=buf.getvalue(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
             else:
