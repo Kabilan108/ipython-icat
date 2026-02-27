@@ -87,13 +87,14 @@ class ICatMagics(Magics):
     @argument("-W", "--width", type=int, help="Width to resize the image")
     @argument("-H", "--height", type=int, help="Height to resize the image")
     @argument("-f", "--fit", action="store_true", help="Fit image to terminal size")
+    @argument("--no-fit", action="store_true", help="Disable auto-fit for the session")
     @line_magic
     def icat(self, line):
         args = parse_argstring(self.icat, line)
         target = (args.target or "").strip()
 
         if target in {"", "on"}:
-            _enable_session(self.shell, fit=args.fit)
+            _enable_session(self.shell, fit=args.fit, no_fit=args.no_fit)
             return
         if target == "off":
             _disable_session(self.shell)
@@ -187,11 +188,14 @@ def _is_fit_enabled() -> bool:
     return False
 
 
-def _enable_session(shell, fit: bool = False) -> None:
+def _enable_session(shell, fit: bool = False, no_fit: bool = False) -> None:
     state = _session_state(shell)
     if state.get("enabled"):
-        # If already enabled, just update fit setting if requested
-        if fit:
+        # If already enabled, update fit setting based on flags
+        if no_fit:
+            state["fit"] = False
+            print("icat: auto-fit disabled for all images")
+        elif fit:
             state["fit"] = True
             print("icat: auto-fit enabled for all images")
         return
@@ -201,12 +205,12 @@ def _enable_session(shell, fit: bool = False) -> None:
     except Exception:
         state["prev_mpl_backend"] = None
 
-    # Store fit setting in session state
-    state["fit"] = fit
+    # Store fit setting in session state (--no-fit takes precedence to disable)
+    state["fit"] = fit and not no_fit
 
     try:
         matplotlib.use("module://icat")
-        fit_msg = " (with auto-fit)" if fit else ""
+        fit_msg = " (with auto-fit)" if state["fit"] else ""
         print(f"icat: enabled matplotlib backend + PIL auto-render{fit_msg}")
     except Exception as e:
         print(f"icat: failed to enable matplotlib backend: {e}")
