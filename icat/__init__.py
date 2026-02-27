@@ -48,8 +48,8 @@ class FigureManagerICat(FigureManagerBase):
         with BytesIO() as buf:
             self.canvas.figure.savefig(buf, format="png")
             
-            # Check if fit is enabled via environment variable
-            fit_enabled = getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}
+            # Check if fit is enabled via environment variable or session state
+            fit_enabled = _is_fit_enabled()
             
             _icat(output=False, input=buf.getvalue(), fit_to_terminal=fit_enabled)
 
@@ -93,7 +93,7 @@ class ICatMagics(Magics):
         target = (args.target or "").strip()
 
         if target in {"", "on"}:
-            _enable_session(self.shell)
+            _enable_session(self.shell, fit=args.fit)
             return
         if target == "off":
             _disable_session(self.shell)
@@ -116,8 +116,8 @@ class ICatMagics(Magics):
             )
             return
 
-        # Check if fit is requested via flag or environment variable
-        fit_enabled = args.fit or getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}
+        # Check if fit is requested via flag, environment variable, or session state
+        fit_enabled = args.fit or _is_fit_enabled()
 
         # resize the image if width or height is specified
         if args.width or args.height:
@@ -143,8 +143,8 @@ def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = 
     """
     img_ = img.copy()
     
-    # Check if fit is requested via parameter or environment variable
-    fit_enabled = fit or getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}
+    # Check if fit is requested via parameter, environment variable, or session state
+    fit_enabled = fit or _is_fit_enabled()
     
     with BytesIO() as buf:
         if width or height:
@@ -168,9 +168,32 @@ def _session_state(shell) -> dict:
     return shell.user_ns.setdefault("_icat_state", {})
 
 
-def _enable_session(shell) -> None:
+def _is_fit_enabled() -> bool:
+    """Check if fit is enabled via environment variable or session state."""
+    # Check environment variable first
+    if getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    
+    # Check session state
+    try:
+        ip = get_ipython()
+        if ip is not None:
+            state = ip.user_ns.get("_icat_state", {})
+            return bool(state.get("fit"))
+    except NameError:
+        # get_ipython not available outside IPython context
+        pass
+    
+    return False
+
+
+def _enable_session(shell, fit: bool = False) -> None:
     state = _session_state(shell)
     if state.get("enabled"):
+        # If already enabled, just update fit setting if requested
+        if fit:
+            state["fit"] = True
+            print("icat: auto-fit enabled for all images")
         return
 
     try:
@@ -178,9 +201,13 @@ def _enable_session(shell) -> None:
     except Exception:
         state["prev_mpl_backend"] = None
 
+    # Store fit setting in session state
+    state["fit"] = fit
+
     try:
         matplotlib.use("module://icat")
-        print("icat: enabled matplotlib backend + PIL auto-render")
+        fit_msg = " (with auto-fit)" if fit else ""
+        print(f"icat: enabled matplotlib backend + PIL auto-render{fit_msg}")
     except Exception as e:
         print(f"icat: failed to enable matplotlib backend: {e}")
 
@@ -222,8 +249,9 @@ def _print_status(shell) -> None:
         current = matplotlib.get_backend()
     except Exception:
         pass
+    fit = bool(state.get("fit"))
     print(
-        f"icat: enabled={enabled}, matplotlib_backend={current!r}, prev_backend={prev!r}"
+        f"icat: enabled={enabled}, fit={fit}, matplotlib_backend={current!r}, prev_backend={prev!r}"
     )
 
 
