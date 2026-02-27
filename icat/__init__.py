@@ -1,3 +1,4 @@
+import shutil
 import sys
 from io import BytesIO
 from os import getenv
@@ -20,11 +21,20 @@ if hasattr(sys, "ps1") or sys.flags.interactive:
 
 
 def _run(*cmd):
-    def f(*args, output=True, **kwargs):
+    def f(*args, output=True, fit_to_terminal=False, img_width=None, img_height=None, **kwargs):
+        # Build command with optional fit parameters
+        cmd_args = list(args)
+        
+        if fit_to_terminal and img_width and img_height:
+            # Calculate terminal-fit dimensions
+            fit_width, fit_height = _get_fit_dimensions(img_width, img_height)
+            # Use --place to specify cell dimensions for kitty
+            cmd_args = [f"--place={fit_width}x{fit_height}@0x0"] + cmd_args
+        
         if output:
             kwargs["capture_output"] = True
             kwargs["text"] = True
-        r = run(cmd + args, **kwargs)
+        r = run(cmd + tuple(cmd_args), **kwargs)
         if output:
             return r.stdout.rstrip()
 
@@ -34,11 +44,69 @@ def _run(*cmd):
 _icat = _run("kitten", "icat", "--align", "left")
 
 
+def _get_fit_dimensions(img_width: int, img_height: int) -> tuple[int, int]:
+    """Calculate dimensions to fit image maximally in terminal.
+    
+    Args:
+        img_width: Original image width in pixels
+        img_height: Original image height in pixels
+        
+    Returns:
+        Tuple of (width, height) in pixels that fit the terminal
+    """
+    try:
+        term_size = shutil.get_terminal_size()
+        term_cols = term_size.columns
+        term_rows = term_size.lines
+    except Exception:
+        # Fallback to a reasonable default if terminal size can't be determined
+        term_cols, term_rows = 80, 24
+    
+    # Leave margin for prompt and output (2 rows for prompt, 2 cols for spacing)
+    max_rows = max(term_rows - 2, 1)
+    max_cols = max(term_cols - 2, 1)
+    
+    # Typical terminal cell aspect ratio is ~1:2 (width:height in character units)
+    # but each character cell is approximately 10x20 pixels
+    # For kitty, we use character dimensions and let kitty handle the pixel conversion
+    
+    # Calculate aspect ratios
+    img_aspect = img_width / img_height if img_height > 0 else 1.0
+    
+    # Character cells are roughly twice as tall as wide, so adjust
+    # We want to preserve the image aspect ratio in screen space
+    cell_aspect_ratio = 0.5  # width/height of a single character cell
+    
+    # Calculate the maximum dimensions that fit, preserving aspect ratio
+    # If we use max_cols columns, how many rows do we need?
+    rows_for_max_cols = max_cols / (img_aspect * cell_aspect_ratio)
+    
+    if rows_for_max_cols <= max_rows:
+        # Image fits when using full width
+        return max_cols, int(rows_for_max_cols)
+    else:
+        # Need to constrain by height
+        cols_for_max_rows = int(max_rows * img_aspect * cell_aspect_ratio)
+        return cols_for_max_rows, max_rows
+
+
 class FigureManagerICat(FigureManagerBase):
     def show(self):
         with BytesIO() as buf:
             self.canvas.figure.savefig(buf, format="png")
-            _icat(output=False, input=buf.getbuffer())
+            buf.seek(0)
+            
+            # Check if fit is enabled via environment variable
+            fit_enabled = getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}
+            
+            if fit_enabled:
+                # Get image dimensions
+                img = Image.open(buf)
+                img_width, img_height = img.size
+                buf.seek(0)
+                _icat(output=False, input=buf.getbuffer(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
+            else:
+                _icat(output=False, input=buf.getbuffer())
 
 
 class FigureCanvasICat(FigureCanvasAgg):
@@ -73,6 +141,7 @@ class ICatMagics(Magics):
     )
     @argument("-W", "--width", type=int, help="Width to resize the image")
     @argument("-H", "--height", type=int, help="Height to resize the image")
+    @argument("-f", "--fit", action="store_true", help="Fit image to terminal size")
     @line_magic
     def icat(self, line):
         args = parse_argstring(self.icat, line)
@@ -102,6 +171,9 @@ class ICatMagics(Magics):
             )
             return
 
+        # Check if fit is requested via flag or environment variable
+        fit_enabled = args.fit or getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}
+
         # resize the image if width or height is specified
         if args.width or args.height:
             img.thumbnail((args.width or img.width, args.height or img.height))
@@ -109,16 +181,42 @@ class ICatMagics(Magics):
         # display image
         with BytesIO() as buf:
             img.save(buf, format="PNG")
-            _icat(output=False, input=buf.getbuffer())
+            buf.seek(0)
+            
+            if fit_enabled and not (args.width or args.height):
+                # Only apply fit if manual dimensions aren't specified
+                img_width, img_height = img.size
+                _icat(output=False, input=buf.getbuffer(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
+            else:
+                _icat(output=False, input=buf.getbuffer())
 
 
-def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = None):
+def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = None, fit: bool = False):
+    """Display a PIL Image in the terminal.
+    
+    Args:
+        img: PIL Image to display
+        width: Optional width to resize to
+        height: Optional height to resize to
+        fit: If True, fit image to terminal size (ignored if width/height specified)
+    """
     img_ = img.copy()
+    
+    # Check if fit is requested via parameter or environment variable
+    fit_enabled = fit or getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}
+    
     with BytesIO() as buf:
         if width or height:
             img_.thumbnail((width or img.width, height or img.height))
         img_.save(buf, format="PNG")
-        _icat(output=False, input=buf.getbuffer())
+        buf.seek(0)
+        
+        if fit_enabled and not (width or height):
+            # Only apply fit if manual dimensions aren't specified
+            img_width, img_height = img_.size
+            _icat(output=False, input=buf.getbuffer(), fit_to_terminal=True, img_width=img_width, img_height=img_height)
+        else:
+            _icat(output=False, input=buf.getbuffer())
 
 
 def load_ipython_extension(ipython):
