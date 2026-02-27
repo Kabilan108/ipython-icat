@@ -41,11 +41,20 @@ ipython
 # Enable icat integration (matplotlib + PIL auto-render)
 %icat
 
+# Enable icat with auto-fit to terminal size
+%icat --fit
+
 # Display an image
 %icat path/to/image.jpg
 
+# Display with auto-fit to terminal
+%icat path/to/image.jpg --fit
+
 # Display with specific dimensions
 %icat path/to/image.jpg -W 300 -H 200
+
+# Check status (shows enabled, fit, and backend info)
+%icat status
 ```
 
 ### Building & Publishing
@@ -67,3 +76,4 @@ Key features:
 - Display matplotlib plots using a custom backend
 - Show image files or PIL Image objects directly in the terminal
 - Resize images on display
+- Auto-fit images to terminal size with `--fit` flag or `IPYTHON_ICAT_FIT=1` environment variable

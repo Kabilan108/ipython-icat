@@ -20,11 +20,20 @@ if hasattr(sys, "ps1") or sys.flags.interactive:
 
 
 def _run(*cmd):
-    def f(*args, output=True, **kwargs):
+    def f(*args, output=True, fit_to_terminal=False, **kwargs):
+        # Build command with optional fit parameters
+        cmd_args = list(args)
+        
+        if fit_to_terminal:
+            # Use kitten icat's native fit features:
+            # --scale-up: Scale up small images to fill the available area
+            # --fit both: Fit to both width and height of the terminal
+            cmd_args = ["--scale-up", "--fit", "both"] + cmd_args
+        
         if output:
             kwargs["capture_output"] = True
             kwargs["text"] = True
-        r = run(cmd + args, **kwargs)
+        r = run(cmd + tuple(cmd_args), **kwargs)
         if output:
             return r.stdout.rstrip()
 
@@ -38,7 +47,11 @@ class FigureManagerICat(FigureManagerBase):
     def show(self):
         with BytesIO() as buf:
             self.canvas.figure.savefig(buf, format="png")
-            _icat(output=False, input=buf.getbuffer())
+            
+            # Check if fit is enabled via environment variable or session state
+            fit_enabled = _is_fit_enabled()
+            
+            _icat(output=False, input=buf.getvalue(), fit_to_terminal=fit_enabled)
 
 
 class FigureCanvasICat(FigureCanvasAgg):
@@ -73,13 +86,20 @@ class ICatMagics(Magics):
     )
     @argument("-W", "--width", type=int, help="Width to resize the image")
     @argument("-H", "--height", type=int, help="Height to resize the image")
+    @argument("-f", "--fit", action="store_true", help="Fit image to terminal size")
+    @argument("--no-fit", action="store_true", help="Disable auto-fit for session")
     @line_magic
     def icat(self, line):
         args = parse_argstring(self.icat, line)
         target = (args.target or "").strip()
 
+        if args.fit and args.no_fit:
+            print("Error: --fit and --no-fit cannot be used together.")
+            return
+
         if target in {"", "on"}:
-            _enable_session(self.shell)
+            fit_pref = True if args.fit else False if args.no_fit else None
+            _enable_session(self.shell, fit=fit_pref)
             return
         if target == "off":
             _disable_session(self.shell)
@@ -102,6 +122,9 @@ class ICatMagics(Magics):
             )
             return
 
+        # Check if fit is requested via flag, environment variable, or session state
+        fit_enabled = args.fit or _is_fit_enabled()
+
         # resize the image if width or height is specified
         if args.width or args.height:
             img.thumbnail((args.width or img.width, args.height or img.height))
@@ -109,16 +132,34 @@ class ICatMagics(Magics):
         # display image
         with BytesIO() as buf:
             img.save(buf, format="PNG")
-            _icat(output=False, input=buf.getbuffer())
+            
+            # Only apply fit if manual dimensions aren't specified
+            should_fit = fit_enabled and not (args.width or args.height)
+            _icat(output=False, input=buf.getvalue(), fit_to_terminal=should_fit)
 
 
-def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = None):
+def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = None, fit: bool = False):
+    """Display a PIL Image in the terminal.
+    
+    Args:
+        img: PIL Image to display
+        width: Optional width to resize to
+        height: Optional height to resize to
+        fit: If True, fit image to terminal size (ignored if width/height specified)
+    """
     img_ = img.copy()
+    
+    # Check if fit is requested via parameter, environment variable, or session state
+    fit_enabled = fit or _is_fit_enabled()
+    
     with BytesIO() as buf:
         if width or height:
             img_.thumbnail((width or img.width, height or img.height))
         img_.save(buf, format="PNG")
-        _icat(output=False, input=buf.getbuffer())
+        
+        # Only apply fit if manual dimensions aren't specified
+        should_fit = fit_enabled and not (width or height)
+        _icat(output=False, input=buf.getvalue(), fit_to_terminal=should_fit)
 
 
 def load_ipython_extension(ipython):
@@ -133,9 +174,32 @@ def _session_state(shell) -> dict:
     return shell.user_ns.setdefault("_icat_state", {})
 
 
-def _enable_session(shell) -> None:
+def _is_fit_enabled() -> bool:
+    """Check if fit is enabled via environment variable or session state."""
+    # Check environment variable first
+    if getenv("IPYTHON_ICAT_FIT", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    
+    # Check session state
+    try:
+        ip = get_ipython()
+        if ip is not None:
+            state = ip.user_ns.get("_icat_state", {})
+            return bool(state.get("fit"))
+    except NameError:
+        # get_ipython not available outside IPython context
+        pass
+    
+    return False
+
+
+def _enable_session(shell, fit: Optional[bool] = None) -> None:
     state = _session_state(shell)
     if state.get("enabled"):
+        # If already enabled, just update fit setting if requested
+        if fit is not None:
+            state["fit"] = fit
+            print(f"icat: auto-fit {'enabled' if fit else 'disabled'} for all images")
         return
 
     try:
@@ -143,9 +207,13 @@ def _enable_session(shell) -> None:
     except Exception:
         state["prev_mpl_backend"] = None
 
+    # Store fit setting in session state
+    state["fit"] = bool(fit)
+
     try:
         matplotlib.use("module://icat")
-        print("icat: enabled matplotlib backend + PIL auto-render")
+        fit_msg = " (with auto-fit)" if state["fit"] else ""
+        print(f"icat: enabled matplotlib backend + PIL auto-render{fit_msg}")
     except Exception as e:
         print(f"icat: failed to enable matplotlib backend: {e}")
 
@@ -187,8 +255,9 @@ def _print_status(shell) -> None:
         current = matplotlib.get_backend()
     except Exception:
         pass
+    fit = _is_fit_enabled()
     print(
-        f"icat: enabled={enabled}, matplotlib_backend={current!r}, prev_backend={prev!r}"
+        f"icat: enabled={enabled}, fit={fit}, matplotlib_backend={current!r}, prev_backend={prev!r}"
     )
 
 
