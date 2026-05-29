@@ -12,7 +12,7 @@ pip install ipython-icat
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - IPython
 - matplotlib
 - Pillow (PIL)

@@ -33,9 +33,9 @@
     in
     {
       devShells.${system} = rec {
-        py38 = mkDevShell "3.8.17";
+        py310 = mkDevShell "3.10.0";
         py312 = mkDevShell "3.12.0";
       };
-      devShell.${system} = self.devShells.${system}.py38;
+      devShell.${system} = self.devShells.${system}.py312;
     };
 }

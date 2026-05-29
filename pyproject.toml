@@ -1,9 +1,9 @@
 [project]
 name = "ipython-icat"
-version = "0.4.2"
+version = "0.5.0"
 description = "IPython magic command for displaying images in kitty terminal"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "ipython",
     "matplotlib",
@@ -21,8 +21,10 @@ Homepage = "https://github.com/Kabilan108/ipython-icat"
 where = ["."]
 include = ["icat*"]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "jupyter>=1.1.1",
 ]
+
+[tool.uv]
 package = true
