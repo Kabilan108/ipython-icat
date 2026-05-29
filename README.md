@@ -28,6 +28,13 @@ In your IPython session, load the extension:
 %load_ext icat
 ```
 
+For startup files, Neovim terminals, or other launchers that should enable the
+backend immediately after loading the extension, set:
+
+```bash
+IPYTHON_ICAT_AUTO=1
+```
+
 ### Displaying Matplotlib Plots
 
 To enable `icat` integration for both matplotlib plots and automatic PIL image rendering:
@@ -105,12 +112,41 @@ You can also resize the image when displaying:
 
 If you'd like to use this plugin with Ghostty, make sure to install the [static kitten binary](https://github.com/kovidgoyal/kitty/releases) which will allow you to run `kitten icat`.
 
+### Using Full-Screen Terminal Apps
+
+`ipython-icat` can render through full-screen terminal programs, such as Neovim
+terminal buffers, by asking `kitten icat` to emit Kitty unicode placeholders.
+Enable that mode with:
+
+```bash
+IPYTHON_ICAT_PLACEHOLDER=1
+```
+
+The placeholder path is configured with environment variables:
+
+- `IPYTHON_ICAT_CELL_PIXELS=WIDTHxHEIGHT` supplies the terminal cell size in
+  pixels. This lets `kitten icat` compute the window size when IPython is
+  running inside an embedded terminal.
+- `IPYTHON_ICAT_WINDOW_SIZE=COLS,ROWS,WIDTH_PX,HEIGHT_PX` overrides the
+  computed window size completely.
+- `IPYTHON_ICAT_TRANSFER_MODE=stream|file|memory|detect` selects the Kitty
+  graphics transfer mode. The default is `stream`, which works reliably through
+  Neovim and Ghostty.
+- `IPYTHON_ICAT_PASSTHROUGH=none|tmux|detect` controls whether `kitten icat`
+  wraps graphics commands for tmux. The default is `none`; use this when a host
+  program relays the graphics request itself.
+
+[`pyrepl.nvim`](https://github.com/Kabilan108/pyrepl.nvim) sets these variables
+automatically when starting IPython and relays Kitty graphics requests from the
+embedded terminal to the host terminal.
+
 ## Features
 
 - Display matplotlib plots directly in kitty terminal
 - Show PIL Image objects or image files
 - Resize images on display
 - Seamless integration with IPython workflow
+- Kitty unicode-placeholder support for embedded terminal workflows
 
 ## Contributing
 

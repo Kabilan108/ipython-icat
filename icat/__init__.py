@@ -2,8 +2,9 @@ import sys
 from io import BytesIO
 from os import getenv
 from pathlib import Path
+from shutil import get_terminal_size
 from subprocess import run
-from typing import Optional
+from typing import Any, List, Optional, Set, Tuple
 
 import matplotlib
 from IPython.core.getipython import get_ipython
@@ -19,26 +20,105 @@ if hasattr(sys, "ps1") or sys.flags.interactive:
     interactive(True)
 
 
-def _run(*cmd):
-    def f(*args, output=True, **kwargs):
-        if output:
-            kwargs["capture_output"] = True
-            kwargs["text"] = True
-        r = run(cmd + args, **kwargs)
-        if output:
-            return r.stdout.rstrip()
-
-    return f
+def _env_flag(name: str) -> bool:
+    return getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-_icat = _run("kitten", "icat", "--align", "left")
+def _cell_pixels() -> Optional[Tuple[int, int]]:
+    value = getenv("IPYTHON_ICAT_CELL_PIXELS", "").strip()
+    if not value:
+        return None
+
+    normalized = value.lower().replace(",", "x")
+    width, _, height = normalized.partition("x")
+    if not width or not height:
+        return None
+
+    try:
+        cell_width = int(width)
+        cell_height = int(height)
+    except ValueError:
+        return None
+
+    if cell_width <= 0 or cell_height <= 0:
+        return None
+
+    return cell_width, cell_height
+
+
+def _choice(name: str, default: str, allowed: Set[str]) -> str:
+    value = getenv(name, "").strip().lower()
+    if value in allowed:
+        return value
+    return default
+
+
+def _transfer_mode() -> str:
+    return _choice(
+        "IPYTHON_ICAT_TRANSFER_MODE",
+        "stream",
+        {"detect", "file", "memory", "stream"},
+    )
+
+
+def _passthrough_mode() -> str:
+    return _choice("IPYTHON_ICAT_PASSTHROUGH", "none", {"detect", "none", "tmux"})
+
+
+def _window_size() -> Optional[str]:
+    explicit = getenv("IPYTHON_ICAT_WINDOW_SIZE", "").strip()
+    if explicit:
+        return explicit
+
+    cell_pixels = _cell_pixels()
+    if cell_pixels is None:
+        return None
+
+    terminal_size = get_terminal_size((80, 24))
+    cell_width, cell_height = cell_pixels
+    return (
+        f"{terminal_size.columns},{terminal_size.lines},"
+        f"{terminal_size.columns * cell_width},{terminal_size.lines * cell_height}"
+    )
+
+
+def _icat_command() -> List[str]:
+    command = ["kitten", "icat", "--align", "left"]
+    if not _env_flag("IPYTHON_ICAT_PLACEHOLDER"):
+        return command
+
+    command.extend(
+        [
+            "--unicode-placeholder",
+            f"--transfer-mode={_transfer_mode()}",
+            f"--passthrough={_passthrough_mode()}",
+            "--stdin=yes",
+        ]
+    )
+
+    window_size = _window_size()
+    if window_size:
+        command.append(f"--use-window-size={window_size}")
+
+    return command
+
+
+def _display_image(
+    img: Image.Image, width: Optional[int] = None, height: Optional[int] = None
+) -> None:
+    img_ = img.copy()
+    with BytesIO() as buf:
+        if width or height:
+            img_.thumbnail((width or img.width, height or img.height))
+        img_.save(buf, format="PNG")
+        run(_icat_command(), input=buf.getbuffer(), check=False)
 
 
 class FigureManagerICat(FigureManagerBase):
-    def show(self):
+    def show(self) -> None:
         with BytesIO() as buf:
             self.canvas.figure.savefig(buf, format="png")
-            _icat(output=False, input=buf.getbuffer())
+            run(_icat_command(), input=buf.getbuffer(), check=False)
 
 
 class FigureCanvasICat(FigureCanvasAgg):
@@ -52,13 +132,13 @@ class _BackendICatAgg(_Backend):
     mainloop = lambda: None
 
     @classmethod
-    def draw_if_interactive(cls):
+    def draw_if_interactive(cls) -> None:
         manager = Gcf.get_active()
         if is_interactive() and manager.canvas.figure.get_axes():
             cls.show()
 
     @classmethod
-    def show(cls, *args, **kwargs):
+    def show(cls, *args, **kwargs) -> None:
         _Backend.show(*args, **kwargs)
         Gcf.destroy_all()
 
@@ -74,7 +154,7 @@ class ICatMagics(Magics):
     @argument("-W", "--width", type=int, help="Width to resize the image")
     @argument("-H", "--height", type=int, help="Height to resize the image")
     @line_magic
-    def icat(self, line):
+    def icat(self, line: str) -> None:
         args = parse_argstring(self.icat, line)
         target = (args.target or "").strip()
 
@@ -102,26 +182,16 @@ class ICatMagics(Magics):
             )
             return
 
-        # resize the image if width or height is specified
-        if args.width or args.height:
-            img.thumbnail((args.width or img.width, args.height or img.height))
-
-        # display image
-        with BytesIO() as buf:
-            img.save(buf, format="PNG")
-            _icat(output=False, input=buf.getbuffer())
+        _display_image(img, args.width, args.height)
 
 
-def icat(img: Image.Image, width: Optional[int] = None, height: Optional[int] = None):
-    img_ = img.copy()
-    with BytesIO() as buf:
-        if width or height:
-            img_.thumbnail((width or img.width, height or img.height))
-        img_.save(buf, format="PNG")
-        _icat(output=False, input=buf.getbuffer())
+def icat(
+    img: Image.Image, width: Optional[int] = None, height: Optional[int] = None
+) -> None:
+    _display_image(img, width, height)
 
 
-def load_ipython_extension(ipython):
+def load_ipython_extension(ipython: Any) -> None:
     ipython.register_magics(ICatMagics)
 
     auto = getenv("IPYTHON_ICAT_AUTO", "").strip().lower()
@@ -129,11 +199,11 @@ def load_ipython_extension(ipython):
         _enable_session(ipython)
 
 
-def _session_state(shell) -> dict:
+def _session_state(shell: Any) -> dict:
     return shell.user_ns.setdefault("_icat_state", {})
 
 
-def _enable_session(shell) -> None:
+def _enable_session(shell: Any) -> None:
     state = _session_state(shell)
     if state.get("enabled"):
         return
@@ -157,7 +227,7 @@ def _enable_session(shell) -> None:
     state["enabled"] = True
 
 
-def _disable_session(shell) -> None:
+def _disable_session(shell: Any) -> None:
     state = _session_state(shell)
     if not state.get("enabled"):
         return
@@ -178,7 +248,7 @@ def _disable_session(shell) -> None:
     state.clear()
 
 
-def _print_status(shell) -> None:
+def _print_status(shell: Any) -> None:
     state = _session_state(shell)
     enabled = bool(state.get("enabled"))
     prev = state.get("prev_mpl_backend")
@@ -192,7 +262,7 @@ def _print_status(shell) -> None:
     )
 
 
-def _resolve_target(shell, target: str):
+def _resolve_target(shell: Any, target: str) -> Optional[object]:
     try:
         return shell.ev(target)
     except Exception:
@@ -208,7 +278,7 @@ def _resolve_target(shell, target: str):
     return None
 
 
-def _coerce_to_image(obj):
+def _coerce_to_image(obj: object) -> Optional[Image.Image]:
     if isinstance(obj, Image.Image):
         return obj.copy()
 
@@ -220,7 +290,7 @@ def _coerce_to_image(obj):
     return None
 
 
-def _enable_pil_autorender(shell) -> None:
+def _enable_pil_autorender(shell: Any) -> None:
     ip = get_ipython()
     if ip is None:
         ip = shell
@@ -239,7 +309,7 @@ def _enable_pil_autorender(shell) -> None:
     fmt.for_type(Image.Image, _pil_printer)
 
 
-def _disable_pil_autorender(shell) -> None:
+def _disable_pil_autorender(shell: Any) -> None:
     ip = get_ipython()
     if ip is None:
         ip = shell
