@@ -14,12 +14,24 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
 
+      uv = pkgs.stdenvNoCC.mkDerivation rec {
+        pname = "uv";
+        version = "0.13.9";
+        src = pkgs.fetchzip {
+          url = "https://github.com/astral-sh/uv/releases/download/${version}/uv-x86_64-unknown-linux-musl.tar.gz";
+          hash = "sha256-EnYQLM+lEXCdEvanWzejUaDpLlxBosq32s7HYxKrwTQ=";
+        };
+        installPhase = ''
+          install -Dm755 uv uvx -t $out/bin
+        '';
+      };
+
       mkDevShell =
         version:
         pkgs.mkShell {
           buildInputs = [
             nixpkgs-python.packages.${system}."${version}"
-            pkgs.uv
+            uv
           ];
           shellHook = ''
             export LD_LIBRARY_PATH=${
