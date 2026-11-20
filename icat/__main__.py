@@ -80,9 +80,9 @@ def get_profile_path(
             ipython_path = Path.home() / ".ipython"
         else:
             ipython_path = Path(ipython_path).expanduser().resolve()
-
-        if not ipython_path.exists():
-            raise FileNotFoundError(f"IPython path {ipython_path} does not exist")
+            if not ipython_path.exists():
+                # Since ipython_path parameter is not None, it must be a valid path
+                raise FileNotFoundError(f"IPython path {ipython_path} does not exist")
 
         profile_dir = ipython_path / f"profile_{profile_name}"
         if not profile_dir.exists():
